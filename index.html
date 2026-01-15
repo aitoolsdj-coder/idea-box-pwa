@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kolektor Pomysłów na Automatyzacje</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>💡 Pomysły na Automatyzacje</h1>
+            <p class="subtitle">Lokalne narzędzie bez backendu</p>
+        </header>
+
+        <div id="setupPart" class="setup-card card">
+            <h3>Wymagany Dostęp do Pliku</h3>
+            <p style="margin: 1rem 0; color: var(--text-muted);">
+                Aby działać bez serwera, przeglądarka musi uzyskać zgodę na edycję pliku <code>ideas.json</code>.
+            </p>
+            <div style="display: flex; justify-content: center;">
+                <button id="btnLoadFile" class="btn">
+                    📂 Otwórz ideas.json
+                </button>
+            </div>
+            <p id="fileStatus" class="status-msg"></p>
+        </div>
+
+        <div id="appContent" class="app-content">
+            <!-- Input Form -->
+            <aside class="form-card card">
+                <h2>Nowy Pomysł</h2>
+                <form id="ideaForm">
+                    <div class="form-group">
+                        <label for="title">Tytuł Pomysłu</label>
+                        <input type="text" id="title" required placeholder="np. Automatyczne faktury">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="area">Obszar</label>
+                        <select id="area" required>
+                            <option value="Marketing">Marketing</option>
+                            <option value="Sprzedaż">Sprzedaż</option>
+                            <option value="HR">HR</option>
+                            <option value="Finanse">Finanse</option>
+                            <option value="Operacje">Operacje</option>
+                            <option value="Inne">Inne</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="author">Autor</label>
+                        <input type="text" id="author" required placeholder="np. Jan Kowalski">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Opis Problemu / Rozwiązania</label>
+                        <textarea id="description" required placeholder="Opisz co wymaga automatyzacji..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn" style="width: 100%">
+                        💾 Zapisz Pomysł
+                    </button>
+                </form>
+            </aside>
+
+            <!-- List -->
+            <main>
+                <h2 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem;">
+                    Zapisane Pomysły
+                    <span id="count"
+                        style="background: var(--primary-color); color: white; padding: 0.2rem 0.8rem; border-radius: 99px; font-size: 0.9rem;">0</span>
+                </h2>
+                <div id="ideasList" class="ideas-list">
+                    <!-- Items will be injected here -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        let fileHandle;
+        let ideas = [];
+
+        const btnLoadFile = document.getElementById('btnLoadFile');
+        const appContent = document.getElementById('appContent');
+        const setupPart = document.getElementById('setupPart');
+        const form = document.getElementById('ideaForm');
+        const ideasList = document.getElementById('ideasList');
+        const countSpan = document.getElementById('count');
+        const fileStatus = document.getElementById('fileStatus');
+
+        // Button to open file picker
+        btnLoadFile.addEventListener('click', async () => {
+            try {
+                // Request file handle
+                [fileHandle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'JSON Files',
+                        accept: { 'application/json': ['.json'] }
+                    }],
+                    multiple: false
+                });
+
+                // Read file
+                await loadIdeas();
+
+                // UI Switch
+                setupPart.style.display = 'none';
+                appContent.classList.add('active');
+
+            } catch (err) {
+                console.error(err);
+                if (err.name !== 'AbortError') {
+                    fileStatus.textContent = 'Błąd przy otwieraniu pliku: ' + err.message;
+                    fileStatus.classList.add('status-error');
+                }
+            }
+        });
+
+        async function loadIdeas() {
+            if (!fileHandle) return;
+
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+
+            try {
+                ideas = text ? JSON.parse(text) : [];
+            } catch (e) {
+                ideas = [];
+            }
+
+            renderList();
+        }
+
+        async function saveIdeas() {
+            if (!fileHandle) return;
+
+            try {
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(ideas, null, 2));
+                await writable.close();
+            } catch (err) {
+                alert('Błąd zapisu! Sprawdź uprawnienia.');
+                console.error(err);
+            }
+        }
+
+        function renderList() {
+            ideasList.innerHTML = '';
+            countSpan.textContent = ideas.length;
+
+            // Render in reverse chronological order
+            [...ideas].reverse().forEach(idea => {
+                const card = document.createElement('div');
+                card.className = 'idea-card card';
+                card.innerHTML = `
+                <div class="idea-header">
+                    <div class="idea-title">${escapeHtml(idea.title)}</div>
+                    <span class="idea-tag">${escapeHtml(idea.area)}</span>
+                </div>
+                <div class="idea-desc">${escapeHtml(idea.description)}</div>
+                <div class="idea-meta">
+                    <span>👤 ${escapeHtml(idea.author)}</span>
+                    <span>📅 ${escapeHtml(idea.date)}</span>
+                </div>
+            `;
+                ideasList.appendChild(card);
+            });
+        }
+
+        // Helper to prevent XSS
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Form Submit
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const newIdea = {
+                id: Date.now(),
+                title: document.getElementById('title').value,
+                area: document.getElementById('area').value,
+                author: document.getElementById('author').value,
+                description: document.getElementById('description').value,
+                date: new Date().toLocaleDateString('pl-PL')
+            };
+
+            ideas.push(newIdea);
+            await saveIdeas(); // Save to file immediately
+            renderList();
+
+            form.reset();
+
+            // Optional: nice flash effect or toast could go here
+        });
+    </script>
+
+</body>
+
+</html>
