@@ -3,34 +3,31 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kolektor Pomysłów na Automatyzacje</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Idea Box PWA</title>
+
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Idea Box">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 
 <body>
 
     <div class="container">
         <header>
-            <h1>💡 Pomysły na Automatyzacje</h1>
-            <p class="subtitle">Lokalne narzędzie bez backendu</p>
+            <h1>💡 Idea Box</h1>
+            <p class="subtitle">Kolektor automatyzacji (v2 Online)</p>
         </header>
 
-        <div id="setupPart" class="setup-card card">
-            <h3>Wymagany Dostęp do Pliku</h3>
-            <p style="margin: 1rem 0; color: var(--text-muted);">
-                Aby działać bez serwera, przeglądarka musi uzyskać zgodę na edycję pliku <code>ideas.json</code>.
-            </p>
-            <div style="display: flex; justify-content: center;">
-                <button id="btnLoadFile" class="btn">
-                    📂 Otwórz ideas.json
-                </button>
-            </div>
-            <p id="fileStatus" class="status-msg"></p>
-        </div>
-
-        <div id="appContent" class="app-content">
+        <div id="appContent" class="app-content active">
             <!-- Input Form -->
             <aside class="form-card card">
                 <h2>Nowy Pomysł</h2>
@@ -62,102 +59,113 @@
                         <textarea id="description" required placeholder="Opisz co wymaga automatyzacji..."></textarea>
                     </div>
 
-                    <button type="submit" class="btn" style="width: 100%">
-                        💾 Zapisz Pomysł
+                    <button type="submit" id="submitBtn" class="btn" style="width: 100%">
+                        <span>💾 Zapisz w Chmurze</span>
                     </button>
                 </form>
+                <p id="statusMsg" class="status-msg"></p>
             </aside>
 
             <!-- List -->
             <main>
                 <h2 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem;">
                     Zapisane Pomysły
-                    <span id="count"
-                        style="background: var(--primary-color); color: white; padding: 0.2rem 0.8rem; border-radius: 99px; font-size: 0.9rem;">0</span>
+                    <span id="count" class="badge">0</span>
                 </h2>
                 <div id="ideasList" class="ideas-list">
-                    <!-- Items will be injected here -->
+                    <div class="loading">Ładowanie pomysłów z Supabase...</div>
                 </div>
             </main>
         </div>
     </div>
 
     <script>
-        let fileHandle;
-        let ideas = [];
+        // --- KONFIGURACJA SUPABASE ---
+        const SUPABASE_URL = 'https://eorhmqdtvxxjkcdudvmj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvcmhtcWR0dnh4amtjZHVkdm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1MDc3NjQsImV4cCI6MjA4NDA4Mzc2NH0.4UCoIjBSxA2kixml93wtCmXvZ5h8Y0udokge7n_bs30';
+        // -----------------------------
 
-        const btnLoadFile = document.getElementById('btnLoadFile');
-        const appContent = document.getElementById('appContent');
-        const setupPart = document.getElementById('setupPart');
+        const API_URL = `${SUPABASE_URL}/rest/v1/ideas`;
+
         const form = document.getElementById('ideaForm');
         const ideasList = document.getElementById('ideasList');
         const countSpan = document.getElementById('count');
-        const fileStatus = document.getElementById('fileStatus');
+        const statusMsg = document.getElementById('statusMsg');
+        const submitBtn = document.getElementById('submitBtn');
 
-        // Button to open file picker
-        btnLoadFile.addEventListener('click', async () => {
+        // Initial Load
+        document.addEventListener('DOMContentLoaded', fetchIdeas);
+
+        async function fetchIdeas() {
+            if (SUPABASE_URL === 'TWOJ_SUPABASE_URL') {
+                ideasList.innerHTML = '<div class="status-error" style="padding:1rem; border-radius:12px; background: #fee2e2; color:#b91c1c;"><strong>Błąd konfiguracji!</strong><br>Musisz wprowadzić SUPABASE_URL i SUPABASE_ANON_KEY w kodzie pliku index.html.</div>';
+                return;
+            }
+
             try {
-                // Request file handle
-                [fileHandle] = await window.showOpenFilePicker({
-                    types: [{
-                        description: 'JSON Files',
-                        accept: { 'application/json': ['.json'] }
-                    }],
-                    multiple: false
+                const response = await fetch(`${API_URL}?select=*&order=created_at.desc`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
                 });
 
-                // Read file
-                await loadIdeas();
+                if (!response.ok) throw new Error('Błąd pobierania danych');
 
-                // UI Switch
-                setupPart.style.display = 'none';
-                appContent.classList.add('active');
-
+                const ideas = await response.json();
+                renderList(ideas);
             } catch (err) {
                 console.error(err);
-                if (err.name !== 'AbortError') {
-                    fileStatus.textContent = 'Błąd przy otwieraniu pliku: ' + err.message;
-                    fileStatus.classList.add('status-error');
-                }
-            }
-        });
-
-        async function loadIdeas() {
-            if (!fileHandle) return;
-
-            const file = await fileHandle.getFile();
-            const text = await file.text();
-
-            try {
-                ideas = text ? JSON.parse(text) : [];
-            } catch (e) {
-                ideas = [];
-            }
-
-            renderList();
-        }
-
-        async function saveIdeas() {
-            if (!fileHandle) return;
-
-            try {
-                const writable = await fileHandle.createWritable();
-                await writable.write(JSON.stringify(ideas, null, 2));
-                await writable.close();
-            } catch (err) {
-                alert('Błąd zapisu! Sprawdź uprawnienia.');
-                console.error(err);
+                ideasList.innerHTML = '<div class="status-error">Nie udało się załadować danych. Sprawdź połączenie.</div>';
             }
         }
 
-        function renderList() {
+        async function saveIdea(newIdea) {
+            submitBtn.disabled = true;
+            submitBtn.querySelector('span').textContent = 'Zapisywanie...';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(newIdea)
+                });
+
+                if (!response.ok) throw new Error('Błąd zapisu');
+
+                showStatus('Sukces! Pomysł zapisany.', 'success');
+                form.reset();
+                fetchIdeas(); // Odśwież listę
+            } catch (err) {
+                console.error(err);
+                showStatus('Błąd zapisu w Supabase!', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.querySelector('span').textContent = '💾 Zapisz w Chmurze';
+            }
+        }
+
+        function renderList(ideas) {
             ideasList.innerHTML = '';
             countSpan.textContent = ideas.length;
 
-            // Render in reverse chronological order
-            [...ideas].reverse().forEach(idea => {
+            if (ideas.length === 0) {
+                ideasList.innerHTML = '<div style="text-align:center; color: #94a3b8; padding: 2rem;">Brak pomysłów. Dodaj pierwszy!</div>';
+                return;
+            }
+
+            ideas.forEach(idea => {
                 const card = document.createElement('div');
                 card.className = 'idea-card card';
+
+                // Format date from created_at string
+                const date = new Date(idea.created_at).toLocaleDateString('pl-PL');
+
                 card.innerHTML = `
                 <div class="idea-header">
                     <div class="idea-title">${escapeHtml(idea.title)}</div>
@@ -166,14 +174,20 @@
                 <div class="idea-desc">${escapeHtml(idea.description)}</div>
                 <div class="idea-meta">
                     <span>👤 ${escapeHtml(idea.author)}</span>
-                    <span>📅 ${escapeHtml(idea.date)}</span>
+                    <span>📅 ${date}</span>
+                    <span class="status-badge ${idea.status}">${idea.status}</span>
                 </div>
             `;
                 ideasList.appendChild(card);
             });
         }
 
-        // Helper to prevent XSS
+        function showStatus(msg, type) {
+            statusMsg.textContent = msg;
+            statusMsg.className = `status-msg status-${type}`;
+            setTimeout(() => { statusMsg.textContent = ''; }, 4000);
+        }
+
         function escapeHtml(text) {
             if (!text) return '';
             return text
@@ -184,26 +198,15 @@
                 .replace(/'/g, "&#039;");
         }
 
-        // Form Submit
-        form.addEventListener('submit', async (e) => {
+        form.addEventListener('submit', (e) => {
             e.preventDefault();
-
             const newIdea = {
-                id: Date.now(),
                 title: document.getElementById('title').value,
                 area: document.getElementById('area').value,
                 author: document.getElementById('author').value,
-                description: document.getElementById('description').value,
-                date: new Date().toLocaleDateString('pl-PL')
+                description: document.getElementById('description').value
             };
-
-            ideas.push(newIdea);
-            await saveIdeas(); // Save to file immediately
-            renderList();
-
-            form.reset();
-
-            // Optional: nice flash effect or toast could go here
+            saveIdea(newIdea);
         });
     </script>
 

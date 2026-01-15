@@ -1,19 +1,46 @@
-# 💡 Lokalne Narzędzie do Pomysłów na Automatyzacje
+# 💡 Idea Box PWA
 
-Prosta aplikacja webowa do zbierania pomysłów, działająca w 100% lokalnie.
+Zmodernizowana wersja kolektora pomysłów na automatyzacje. Działa jako aplikacja progresywna (PWA) z synchronizacją w chmurze (Supabase).
 
-## Instrukcja Uruchomienia
+## 🚀 Szybki Start
 
-1. **Upewnij się, że używasz Chrome, Edge, Opera lub Brave** (Safari i Firefox nie obsługują w pełni bezpośredniego zapisu do pliku).
-2. Otwórz plik `index.html` w przeglądarce (dwuklik lub przeciągnij do okna).
-3. Kliknij przycisk **"Otwórz ideas.json"**.
-4. Wskaż plik `ideas.json`, który znajduje się w tym samym folderze.
-5. Przeglądarka spyta o zgodę na edycję pliku – **Zaakceptuj**.
+1.  Otwórz `index.html` i wprowadź swoje `SUPABASE_URL` oraz `SUPABASE_ANON_KEY`.
+2.  Zdeployuj folder na **Netlify**.
+3.  Otwórz stronę na telefonie i wybierz **"Dodaj do ekranu głównego"**.
 
-Gotowe! Teraz każdy dodany pomysł zostanie automatycznie zapisany w pliku `ideas.json` na Twoim dysku.
+## 🛠 Konfiguracja Supabase
 
-## Pliki
+Stwórz nową bazę i uruchom następujący SQL w edytorze zapytań:
 
-- `index.html` – Aplikacja
-- `style.css` – Wygląd
-- `ideas.json` – Baza danych (plik tekstowy)
+```sql
+create table public.ideas (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  area text not null,
+  author text not null,
+  description text,
+  status text default 'NEW',
+  created_at timestamp with time zone default now()
+);
+
+-- Włącz dostęp publiczny (jeśli nie używasz Auth)
+alter table public.ideas enable row level security;
+create policy "Allow public read" on public.ideas for select using (true);
+create policy "Allow public insert" on public.ideas for insert with check (true);
+```
+
+## 🌐 Deploy na Netlify (Zmienne Środowiskowe)
+
+Aby nie trzymać kluczy w kodzie po deployu:
+1. W kodzie JS zmień stałe na:
+   ```javascript
+   const SUPABASE_URL = window.location.hostname === 'localhost' ? 'TWOJ_LOCAL_URL' : ''; 
+   // Docelowo najlepiej użyć narzędzia typu Vite/Webpack, 
+   // ale dla prostego HTML możesz użyć pola w panelu Netlify (Snippet Injection).
+   ```
+2. **UWAGA**: W tym prostym projekcie (bez build-stepu) klucze są trzymane w pliku `index.html`. Dla pełnego bezpieczeństwa zaleca się użycie frameworka (np. Vite) i zmiennych `.env`.
+
+## 📱 Funkcje PWA
+- **Tryb pełnoekranowy** na iOS i Android.
+- **Ikona aplikacji** na pulpicie.
+- **Mobile-first UI** dopasowany do ekranów dotykowych.
